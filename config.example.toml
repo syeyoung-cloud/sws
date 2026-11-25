@@ -1,0 +1,19 @@
+# An example sws configuration. Copy it to ~/.config/sws/config.toml or /etc/sws/config.toml and
+# change the addresses; drop the sections for services you don't use.
+
+[identity]
+source = "auto"            # auto, kubernetes, github or command
+# command = ""             # for "command": prints a token for the audience in $SWS_AUDIENCE
+
+[drive]
+url = "https://files.drive.example"
+audience = "https://files.drive.example"
+
+[git]
+sts = "https://sts.git.example/sts"
+audience = "https://sts.git.example"
+host = "git.example"
+
+[pulp]
+url = "https://pulp.example"
+audience = "https://pulp.example"
