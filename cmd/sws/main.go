@@ -23,6 +23,9 @@ import (
 	"github.com/cyoung06/sws/internal/git"
 	"github.com/cyoung06/sws/internal/identity"
 	"github.com/cyoung06/sws/internal/pulp"
+
+	// Roots to trust when the system has none (a bare image): used only then.
+	_ "golang.org/x/crypto/x509roots/fallback"
 )
 
 // version is set at build time.
