@@ -5,11 +5,14 @@
 //   - kubernetes: the pod's service account token may create tokens for its own account
 //     (TokenRequest), for any audience. A service account without that right fails here.
 //   - github: a GitHub Actions job with `permissions: id-token: write`.
+//   - metadata: a VM's metadata service (http://169.254.169.254/v1/token?audience=..., with the
+//     header Metadata: true).
 //   - command: any program that prints a token for the audience in $SWS_AUDIENCE (a VM's agent,
 //     another cloud's metadata service).
 //
 // auto picks github when the job's variables are set, else kubernetes when a service account
-// token is mounted, else the command when one is configured.
+// token is mounted, else the command when one is configured, else the metadata service when it
+// answers.
 package identity
 
 import (
@@ -22,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -39,8 +43,9 @@ type Source interface {
 // KubeDir is where a pod's service account is mounted.
 var KubeDir = "/var/run/secrets/kubernetes.io/serviceaccount"
 
-// New makes the source a configuration names.
-func New(source, command string) (Source, error) {
+// New makes the source a configuration names. metadataURL is the metadata service's address for
+// "metadata" ("" is the default, 169.254.169.254).
+func New(source, command, metadataURL string) (Source, error) {
 	switch source {
 	case "github":
 		return GitHub{}, nil
@@ -48,6 +53,8 @@ func New(source, command string) (Source, error) {
 		return &Kubernetes{Dir: KubeDir}, nil
 	case "command":
 		return Command{Command: command}, nil
+	case "metadata":
+		return Metadata{URL: metadataURL}, nil
 	case "auto", "":
 		if os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL") != "" {
 			return GitHub{}, nil
@@ -58,7 +65,10 @@ func New(source, command string) (Source, error) {
 		if command != "" {
 			return Command{Command: command}, nil
 		}
-		return nil, errors.New("no workload identity here: not a GitHub Actions job with id-token: write, no service account token at " + KubeDir + ", and no identity command configured")
+		if metadataAnswers(metadataURL) {
+			return Metadata{URL: metadataURL}, nil
+		}
+		return nil, errors.New("no workload identity here: not a GitHub Actions job with id-token: write, no service account token at " + KubeDir + ", no identity command configured, and no metadata service at " + orDefault(metadataURL))
 	}
 	return nil, fmt.Errorf("unknown identity source %q", source)
 }
@@ -239,6 +249,84 @@ func (GitHub) Token(ctx context.Context, audience string) (string, error) {
 	return out.Value, nil
 }
 
+// DefaultMetadataURL is where VMs ask for their identity token, the address clouds' metadata
+// services use.
+const DefaultMetadataURL = "http://169.254.169.254"
+
+// Metadata asks a VM's metadata service for a token:
+//
+//	GET <url>/v1/token?audience=<audience>   (header Metadata: true)
+//	→ {"token": "<JWT>", "expiresIn": 3599, "issuer": "...", "subject": "..."}
+type Metadata struct {
+	URL string
+	// Timeout for each call; default 5 seconds (the service is on the machine's own link).
+	Timeout time.Duration
+}
+
+func (Metadata) Name() string { return "metadata" }
+
+func (m Metadata) Token(ctx context.Context, audience string) (string, error) {
+	base := strings.TrimRight(m.URL, "/")
+	if base == "" {
+		base = DefaultMetadataURL
+	}
+	timeout := m.Timeout
+	if timeout == 0 {
+		timeout = 5 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/token?audience="+url.QueryEscape(audience), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Metadata", "true")
+	req.Header.Set("Accept", "application/json")
+	// never through a proxy: the service refuses proxied requests, and the token is the machine's
+	client := &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("asking the metadata service at %s for a token: %w", base, err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("the metadata service at %s refused a token: %s %s", base, resp.Status, strings.TrimSpace(string(b)))
+	}
+	var out struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(b, &out); err != nil || out.Token == "" {
+		return "", fmt.Errorf("the metadata service at %s answered no token", base)
+	}
+	return out.Token, nil
+}
+
+// metadataAnswers tells whether a metadata service answers at all, quickly: for auto, where
+// nothing else was found.
+func metadataAnswers(base string) bool {
+	if base == "" {
+		base = DefaultMetadataURL
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return false
+	}
+	host := u.Host
+	if u.Port() == "" {
+		host = net.JoinHostPort(u.Hostname(), "80")
+		if u.Scheme == "https" {
+			host = net.JoinHostPort(u.Hostname(), "443")
+		}
+	}
+	c, err := net.DialTimeout("tcp", host, 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	c.Close()
+	return true
+}
+
 // Command runs a program that prints a token for $SWS_AUDIENCE.
 type Command struct{ Command string }
 
@@ -257,4 +345,11 @@ func (c Command) Token(ctx context.Context, audience string) (string, error) {
 		return "", errors.New("the identity command printed no token")
 	}
 	return tok, nil
+}
+
+func orDefault(u string) string {
+	if u == "" {
+		return DefaultMetadataURL
+	}
+	return u
 }

@@ -2,7 +2,7 @@
 # change the addresses; drop the sections for services you don't use.
 
 [identity]
-source = "auto"            # auto, kubernetes, github or command
+source = "auto"            # auto, kubernetes, github, metadata or command
 # command = ""             # for "command": prints a token for the audience in $SWS_AUDIENCE
 
 [drive]

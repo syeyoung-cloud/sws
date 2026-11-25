@@ -93,7 +93,7 @@ func TestGitHub(t *testing.T) {
 	defer srv.Close()
 	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", srv.URL+"/token?api-version=2.0")
 	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "req-token")
-	s, err := New("auto", "")
+	s, err := New("auto", "", "")
 	if err != nil || s.Name() != "github" {
 		t.Fatal(s, err)
 	}
@@ -105,14 +105,40 @@ func TestGitHub(t *testing.T) {
 func TestCommand(t *testing.T) {
 	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "")
 	KubeDir = t.TempDir()
-	s, err := New("auto", `printf 'tok-for-%s\n' "$SWS_AUDIENCE"`)
+	s, err := New("auto", `printf 'tok-for-%s\n' "$SWS_AUDIENCE"`, "")
 	if err != nil || s.Name() != "command" {
 		t.Fatal(s, err)
 	}
 	if tok, err := s.Token(context.Background(), "https://pulp.test"); err != nil || tok != "tok-for-https://pulp.test" {
 		t.Fatalf("%q %v", tok, err)
 	}
-	if _, err := New("auto", ""); err == nil {
+	if _, err := New("auto", "", "http://127.0.0.1:1"); err == nil {
 		t.Fatal("no source anywhere was taken")
+	}
+}
+
+// A VM's metadata service: one audience, the Metadata header, never through a proxy; auto finds it
+// when nothing else is there.
+func TestMetadata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/token" || r.Header.Get("Metadata") != "true" || r.URL.Query().Get("audience") != "https://pulp.test" {
+			w.WriteHeader(400)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"token": "vm-jwt", "expiresIn": 3599, "issuer": "https://k8s.test", "subject": "system:serviceaccount:cloud:identity-x"})
+	}))
+	defer srv.Close()
+	t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
+	t.Setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+	KubeDir = t.TempDir()
+	s, err := New("auto", "", srv.URL)
+	if err != nil || s.Name() != "metadata" {
+		t.Fatal(s, err)
+	}
+	if tok, err := s.Token(context.Background(), "https://pulp.test"); err != nil || tok != "vm-jwt" {
+		t.Fatalf("%q %v", tok, err)
+	}
+	if _, err := s.Token(context.Background(), "https://other.test"); err == nil || !strings.Contains(err.Error(), "refused") {
+		t.Fatal(err)
 	}
 }

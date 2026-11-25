@@ -130,7 +130,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if err != nil {
 		return err
 	}
-	id, idErr := identity.New(cfg.Identity.Source, cfg.Identity.Command)
+	id, idErr := identity.New(cfg.Identity.Source, cfg.Identity.Command, cfg.Identity.MetadataURL)
 	e := &env{cfg: cfg, id: id, state: stateDir(), out: stdout, err: stderr}
 	needID := func() error { return idErr }
 	switch args[0] {

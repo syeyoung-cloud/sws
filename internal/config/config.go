@@ -5,8 +5,9 @@
 // $XDG_CONFIG_HOME/sws/config.toml (~/.config/sws/config.toml) and /etc/sws/config.toml:
 //
 //	[identity]
-//	source = "auto"          # auto, kubernetes, github or command
+//	source = "auto"          # auto, kubernetes, github, metadata or command
 //	command = ""             # for "command": prints a token for the audience in $SWS_AUDIENCE
+//	metadata_url = ""        # for "metadata": default http://169.254.169.254
 //
 //	[drive]
 //	url = "https://files.drive.example"
@@ -37,6 +38,8 @@ import (
 type Identity struct {
 	Source  string `toml:"source"`
 	Command string `toml:"command"`
+	// MetadataURL is the metadata service's address for "metadata"; default http://169.254.169.254.
+	MetadataURL string `toml:"metadata_url"`
 }
 
 type Drive struct {
@@ -106,7 +109,7 @@ func Read(path string) (*Config, error) {
 		c.Identity.Source = "auto"
 	}
 	switch c.Identity.Source {
-	case "auto", "kubernetes", "github":
+	case "auto", "kubernetes", "github", "metadata":
 	case "command":
 		if c.Identity.Command == "" {
 			return nil, fmt.Errorf("%s: identity source \"command\" needs a command", path)

@@ -23,6 +23,8 @@ sws asks for a fresh token for each service's audience:
   account (`create` on `serviceaccounts/token` for that one account). sws asks the API server
   (`TokenRequest`) for a token bound to the pod, for an hour.
 - **GitHub Actions:** the job needs `permissions: id-token: write`.
+- **A VM:** its metadata service, `GET http://169.254.169.254/v1/token?audience=…` with the header
+  `Metadata: true` (`metadata_url` changes the address).
 - **Anything else:** a command that prints a token for the audience in `$SWS_AUDIENCE`.
 
 `sws whoami` shows the issuer and subject a person grants to.
@@ -34,7 +36,7 @@ its section is not set up.
 
 ```toml
 [identity]
-source = "auto"            # auto, kubernetes, github or command
+source = "auto"            # auto, kubernetes, github, metadata or command
 # command = "my-agent token"   # for "command": print a token for $SWS_AUDIENCE
 
 [drive]
