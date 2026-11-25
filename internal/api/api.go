@@ -139,8 +139,11 @@ func Wait(ctx context.Context, r Request, check func(context.Context) (Decision,
 		case <-ctx.Done():
 			wctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			if withdraw != nil {
-				_ = withdraw(wctx)
+			if withdraw == nil {
+				return Decision{}, errors.New("stopped")
+			}
+			if err := withdraw(wctx); err != nil && !IsStatus(err, http.StatusNotFound) {
+				return Decision{}, fmt.Errorf("stopped, but the request could not be withdrawn (it lapses by itself): %w", err)
 			}
 			return Decision{}, errors.New("stopped; the request is withdrawn")
 		case <-t.C:
