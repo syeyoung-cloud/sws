@@ -22,6 +22,10 @@
 //	url = "https://pulp.example"
 //	audience = "https://pulp.example"
 //
+//	[notify]
+//	url = "https://notify.example"
+//	audience = "https://notify.example"
+//
 // A service without its section is not set up, and its commands say so.
 package config
 
@@ -58,11 +62,17 @@ type Pulp struct {
 	Audience string `toml:"audience"`
 }
 
+type Notify struct {
+	URL      string `toml:"url"`
+	Audience string `toml:"audience"`
+}
+
 type Config struct {
 	Identity Identity `toml:"identity"`
 	Drive    *Drive   `toml:"drive"`
 	Git      *Git     `toml:"git"`
 	Pulp     *Pulp    `toml:"pulp"`
+	Notify   *Notify  `toml:"notify"`
 	// Path is the file it was read from ("" when there was none).
 	Path string `toml:"-"`
 }
@@ -138,6 +148,10 @@ func Read(path string) (*Config, error) {
 	if p := c.Pulp; p != nil {
 		p.URL = strings.TrimRight(p.URL, "/")
 		errs = append(errs, check("pulp", "url", p.URL, true), check("pulp", "audience", p.Audience, false))
+	}
+	if n := c.Notify; n != nil {
+		n.URL = strings.TrimRight(n.URL, "/")
+		errs = append(errs, check("notify", "url", n.URL, true), check("notify", "audience", n.Audience, false))
 	}
 	if err := errors.Join(errs...); err != nil {
 		return nil, err

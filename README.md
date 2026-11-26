@@ -51,6 +51,10 @@ host = "git.example"
 [pulp]
 url = "https://pulp.example"
 audience = "https://pulp.example"
+
+[notify]
+url = "https://notify.example"
+audience = "https://notify.example"
 ```
 
 ## Use

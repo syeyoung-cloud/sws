@@ -22,6 +22,7 @@ import (
 	"github.com/cyoung06/sws/internal/drive"
 	"github.com/cyoung06/sws/internal/git"
 	"github.com/cyoung06/sws/internal/identity"
+	"github.com/cyoung06/sws/internal/notify"
 	"github.com/cyoung06/sws/internal/pulp"
 
 	// Roots to trust when the system has none (a bare image): used only then.
@@ -31,7 +32,7 @@ import (
 // version is set at build time.
 var version = "dev"
 
-const usage = `sws: a workload's way into the drive, git and Pulp, with no stored secret.
+const usage = `sws: a workload's way into the drive, git, Pulp and notify, with no stored secret.
 
   sws whoami                          who this workload is (issuer and subject) and the services set up
   sws token <audience>                print the workload's token for an audience
@@ -56,6 +57,12 @@ const usage = `sws: a workload's way into the drive, git and Pulp, with no store
                                       ask a member for pull or push on distributions
   sws pulp token                      print the token (Bearer, or Basic with user __token__)
   sws pulp withdraw <id>
+
+  sws notify request [label]          ask a member to let this workload notify them: prints a link, waits
+  sws notify send [-body text] [-link https://...] <title>
+                                      notify the members who granted this workload
+  sws notify grants                   the members who get this workload's notifications
+  sws notify withdraw <id>
 
 Configuration: ` + "`sws whoami`" + ` says which file was read; see the README.
 `
@@ -184,6 +191,14 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 			return err
 		}
 		return e.pulpCmd(ctx, args[1:])
+	case "notify":
+		if cfg.Notify == nil {
+			return notSetUp("notify", cfg)
+		}
+		if err := needID(); err != nil {
+			return err
+		}
+		return e.notifyCmd(ctx, args[1:])
 	}
 	return usageError("unknown command " + args[0])
 }
@@ -217,6 +232,12 @@ func (e *env) whoami(ctx context.Context, idErr error) error {
 		services = append(services, "pulp "+p.URL)
 		if audience == "" {
 			audience = p.Audience
+		}
+	}
+	if n := e.cfg.Notify; n != nil {
+		services = append(services, "notify "+n.URL)
+		if audience == "" {
+			audience = n.Audience
 		}
 	}
 	if len(services) == 0 {
@@ -485,4 +506,62 @@ func (e *env) pulpCmd(ctx context.Context, args []string) error {
 		return p.Withdraw(ctx, args[1])
 	}
 	return usageError("pulp: unknown command " + args[0])
+}
+
+func (e *env) notifyCmd(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return usageError("notify: which command?")
+	}
+	n := &notify.Notify{URL: e.cfg.Notify.URL, Audience: e.cfg.Notify.Audience, Identity: e.id}
+	switch args[0] {
+	case "send":
+		fs := flag.NewFlagSet("notify send", flag.ContinueOnError)
+		body := fs.String("body", "", "more text, under the title")
+		link := fs.String("link", "", "an https address to open when the notification is tapped")
+		rest, err := parse(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(rest) == 0 {
+			return usageError("notify send [-body text] [-link https://...] <title>")
+		}
+		got, err := n.Send(ctx, notify.Message{Title: strings.Join(rest, " "), Body: *body, Link: *link})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(e.out, "Sent to %d member(s).\n", got)
+		return nil
+	case "request":
+		label := strings.Join(args[1:], " ")
+		if label == "" {
+			if h, err := os.Hostname(); err == nil {
+				label = h
+			} else {
+				label = "a workload"
+			}
+		}
+		r, err := n.Ask(ctx, label)
+		if err != nil {
+			return err
+		}
+		return e.wait(ctx, r, func(c context.Context) (api.Decision, error) { return n.Check(c, r.ID) }, func(c context.Context) error { return n.Withdraw(c, r.ID) })
+	case "grants":
+		gs, err := n.Grants(ctx)
+		if err != nil {
+			return err
+		}
+		if len(gs) == 0 {
+			fmt.Fprintln(e.out, "No member gets this workload's notifications yet: sws notify request.")
+		}
+		for _, g := range gs {
+			fmt.Fprintf(e.out, "%s\t%s\t(since %s)\n", g.Member, g.Label, g.Created.Local().Format(time.DateTime))
+		}
+		return nil
+	case "withdraw":
+		if len(args) != 2 {
+			return usageError("notify withdraw <id>")
+		}
+		return n.Withdraw(ctx, args[1])
+	}
+	return usageError("notify: unknown command " + args[0])
 }
