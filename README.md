@@ -8,7 +8,7 @@ into what each service's ordinary tools use.
 | Service | What sws does | Then use |
 |---|---|---|
 | a drive with a workload STS | SSH certificate (renewed when ssh connects) or SMB password | `sftp`, `rsync`, `sshfs`, `smbclient` |
-| Forgejo behind [git-sts](https://github.com/cyoung06/git-sts) | git's credential helper; a token for one repo | `git`, a Forgejo CLI |
+| Forgejo behind [git-sts](https://github.com/syeyoung-cloud/git-sts) | git's credential helper; a token for one repo | `git`, a Forgejo CLI |
 | Pulp with workload identity | the token itself (Bearer, or Basic with user `__token__`) | `pulp`, `pip`, `twine`, `npm` |
 
 Every service follows the same seam: the service verifies the token, a person grants the token's

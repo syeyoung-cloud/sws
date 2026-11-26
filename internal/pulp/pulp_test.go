@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cyoung06/sws/internal/api"
+	"github.com/syeyoung-cloud/sws/internal/api"
 )
 
 type fixedToken string

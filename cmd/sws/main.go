@@ -17,13 +17,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cyoung06/sws/internal/api"
-	"github.com/cyoung06/sws/internal/config"
-	"github.com/cyoung06/sws/internal/drive"
-	"github.com/cyoung06/sws/internal/git"
-	"github.com/cyoung06/sws/internal/identity"
-	"github.com/cyoung06/sws/internal/notify"
-	"github.com/cyoung06/sws/internal/pulp"
+	"github.com/syeyoung-cloud/sws/internal/api"
+	"github.com/syeyoung-cloud/sws/internal/config"
+	"github.com/syeyoung-cloud/sws/internal/drive"
+	"github.com/syeyoung-cloud/sws/internal/git"
+	"github.com/syeyoung-cloud/sws/internal/identity"
+	"github.com/syeyoung-cloud/sws/internal/notify"
+	"github.com/syeyoung-cloud/sws/internal/pulp"
 
 	// Roots to trust when the system has none (a bare image): used only then.
 	_ "golang.org/x/crypto/x509roots/fallback"

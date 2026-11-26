@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cyoung06/sws/internal/api"
-	"github.com/cyoung06/sws/internal/identity"
+	"github.com/syeyoung-cloud/sws/internal/api"
+	"github.com/syeyoung-cloud/sws/internal/identity"
 )
 
 type Git struct {

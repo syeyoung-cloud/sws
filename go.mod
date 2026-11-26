@@ -1,4 +1,4 @@
-module github.com/cyoung06/sws
+module github.com/syeyoung-cloud/sws
 
 go 1.26.0
 

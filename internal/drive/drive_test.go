@@ -17,7 +17,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/cyoung06/sws/internal/api"
+	"github.com/syeyoung-cloud/sws/internal/api"
 )
 
 type fixedToken string
